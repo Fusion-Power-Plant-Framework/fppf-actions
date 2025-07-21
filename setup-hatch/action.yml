@@ -1,0 +1,20 @@
+name: setup-hatch
+
+inputs:
+  python-versions:
+    required: false
+    default: '>=3.10 <3.14'
+
+description: "Sets up Hatch for use in the current workflow"
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-versions }}
+        cache: "pip"
+    - name: Install build dependencies
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip
+        pip install hatch
