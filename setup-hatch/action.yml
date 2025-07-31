@@ -1,7 +1,7 @@
 name: setup-hatch
 
 inputs:
-  python-versions:
+  python-version:
     required: false
     default: '>=3.10 <3.14'
 

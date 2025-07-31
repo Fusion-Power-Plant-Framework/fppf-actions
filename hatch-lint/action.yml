@@ -1,0 +1,33 @@
+name: hatch-lint
+description: Runs the lint:fmt Hatch task, requires Hatch to be setup already
+runs:
+  using: "composite"
+  steps:
+    - name: "Cache pre-commit"
+      id: cache-precommit
+      uses: actions/cache/restore@v4
+      with:
+        path: ~/.cache/pre-commit
+        key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+
+    - name: "Install pre-commit"
+      shell: bash -l {0}
+      run: |
+        pip install pre-commit
+
+    - name: Run formatting (pre-commit)
+      shell: bash
+      run: |
+        echo '```console' > "$GITHUB_STEP_SUMMARY"
+        hatch run lint:fmt --show-diff-on-failure --color=always | \
+            tee >(sed -E 's/\x1B\[([0-9]{1,2}(;[0-9]{1,2})*)?[mGK]//g' >> "$GITHUB_STEP_SUMMARY") >&1
+        exit_code="${PIPESTATUS[0]}"
+        echo '```' >> "$GITHUB_STEP_SUMMARY"
+        exit "$exit_code"
+
+    - name: Save pip build cache￼
+      uses: actions/cache/save@v4
+      if: always() && steps.cache-precommit.outputs.cache-hit != 'true'
+      with:
+        path: ~/.cache/pre-commit
+        key: ${{ steps.cache-precommit.outputs.cache-primary-key }}
