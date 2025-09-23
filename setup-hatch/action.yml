@@ -17,4 +17,4 @@ runs:
       shell: bash
       run: |
         python -m pip install --upgrade pip
-        pip install hatch
+        pip install hatch click!=8.3.0
