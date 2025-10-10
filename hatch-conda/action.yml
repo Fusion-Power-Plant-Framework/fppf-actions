@@ -52,9 +52,8 @@ runs:
           overwrite: true
 
       - name: Save conda build cache
-        if: ${{ inputs.environment }} != ''
         uses: actions/cache/save@v4
-        if: always() && steps.cache-conda.outputs.cache-hit != 'true'
+        if: always() && ${{ inputs.environment }} != '' && steps.cache-conda.outputs.cache-hit != 'true'
         with:
           path: ~/conda_pkgs_dir
           key: ${{ steps.cache-conda.outputs.cache-primary-key }}
