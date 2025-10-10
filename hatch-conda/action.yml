@@ -1,0 +1,60 @@
+name: hatch-conda
+
+inputs:
+  python-version:
+    required: false
+    default: '>=3.10 <3.14'
+  environment:
+    require: false
+    default: ''
+
+description: "Sets up Hatch for use in the current workflow"
+runs:
+  using: "composite"
+  steps:
+      - name: Cache conda
+        id: cache-conda
+        if: ${{ inputs.environment }} != ''
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/conda_pkgs_dir
+          key: ${{ runner.os }}-conda-${{ inputs.python-version }}-${{
+            hashFiles('conda/environment.yml') }}
+
+      - name: Install Environment
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          miniforge-version: "latest"
+          auto-activate-base: true
+          activate-environment: ""
+          use-only-tar-bz2: false
+          conda-remove-defaults: true
+
+      - name: Install hatch conda
+        shell: bash -l {0}
+        run: pip install hatch-conda hatch click!=8.3.0
+
+      - name: Create environment
+        if: ${{ inputs.environment }} != ''
+        shell: bash -l {0}
+        run: hatch env create ${{ inputs.environment }}
+
+      - name: Freeze conda env
+        if: ${{ inputs.environment }} != ''
+        shell: bash -l {0}
+        run: |
+          conda env export -n ${{ inputs.environment }} > ${{ inputs.environment }}_${{ inputs.python-version }}_${{ runner.os }}.yml
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.environment }}_${{ inputs.python-version }}_${{ runner.os }}.yml
+          path: ${{ inputs.environment }}_${{ inputs.python-version }}_${{ runner.os }}.yml
+          overwrite: true
+
+      - name: Save conda build cache
+        uses: actions/cache/save@v4
+        if: always() && ${{ inputs.environment }} != '' && steps.cache-conda.outputs.cache-hit != 'true'
+        with:
+          path: ~/conda_pkgs_dir
+          key: ${{ steps.cache-conda.outputs.cache-primary-key }}
+
