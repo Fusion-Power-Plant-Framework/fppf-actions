@@ -15,14 +15,14 @@ runs:
       - name: Cache conda
         id: cache-conda
         if: ${{ inputs.environment }} != ''
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
           path: ~/conda_pkgs_dir
           key: ${{ runner.os }}-conda-${{ inputs.python-version }}-${{
             hashFiles('conda/environment.yml') }}
 
       - name: Install Environment
-        uses: conda-incubator/setup-miniconda@v3
+        uses: conda-incubator/setup-miniconda@fc2d68f6413eb2d87b895e92f8584b5b94a10167
         with:
           miniforge-version: "latest"
           auto-activate-base: true
@@ -35,25 +35,25 @@ runs:
         run: pip install hatch-conda hatch click!=8.3.0
 
       - name: Create environment
-        if: ${{ inputs.environment }} != ''
+        if: ${{ inputs.environment != ''}}
         shell: bash -l {0}
         run: hatch env create ${{ inputs.environment }}
 
       - name: Freeze conda env
-        if: ${{ inputs.environment }} != ''
+        if: ${{ inputs.environment != '' }}
         shell: bash -l {0}
         run: |
           conda env export -n ${{ inputs.environment }} > ${{ inputs.environment }}_${{ inputs.python-version }}_${{ runner.os }}.yml
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: ${{ inputs.environment }}_${{ inputs.python-version }}_${{ runner.os }}.yml
           path: ${{ inputs.environment }}_${{ inputs.python-version }}_${{ runner.os }}.yml
           overwrite: true
 
       - name: Save conda build cache
-        uses: actions/cache/save@v4
-        if: always() && ${{ inputs.environment }} != '' && steps.cache-conda.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        if: ${{ always() && inputs.environment != '' && steps.cache-conda.outputs.cache-hit != 'true' }}
         with:
           path: ~/conda_pkgs_dir
           key: ${{ steps.cache-conda.outputs.cache-primary-key }}
