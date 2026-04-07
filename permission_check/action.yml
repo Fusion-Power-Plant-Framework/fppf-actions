@@ -12,7 +12,7 @@ runs:
         GITHUB_TOKEN: ${{ inputs.token }}
       shell: bash
       run: |
-        role_type="$(gh api /repos/${{ github.repository_owner}}/${{ github.repository.name }}/collaborators/${{ github.actor }}/permission --jq '.permission')"
+        role_type="$(gh api /repos/${{ github.repository_owner}}/${{ github.event.repository.name }}/collaborators/${{ github.actor }}/permission --jq '.permission')"
         if [[ $role_type != 'admin' ]]; then
           exit 1
         fi
