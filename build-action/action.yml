@@ -3,6 +3,9 @@ name: Build bluemira
 inputs:
   python-version:
     required: true
+  clone-bluemira:
+    required: false
+    default: "true"
   bm-private-data-key:
     default: ""
   with-artifact:
@@ -13,17 +16,16 @@ runs:
   using: "composite"
   steps:
 
-    - name: Checkout bluemira-private-data
-      uses: actions/checkout@v5
-      if: ${{ !github.event.pull_request.head.repo.fork && inputs.bm-private-data-key != '' }}
+    - name: Checkout bluemira
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      if: inputs.clone-bluemira == 'true'
       with:
-        repository: Fusion-Power-Plant-Framework/bluemira-private-data
-        ssh-key: ${{ inputs.bm-private-data-key }}
-        path: bluemira-private-data
+        repository: Fusion-Power-Plant-Framework/bluemira
+        path: bluemira
 
     - name: Cache pip
       id: cache-pip
-      uses: actions/cache/restore@v4
+      uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
       with:
         path: ~/.cache/pip
         key: ${{ runner.os }}-pip-${{ inputs.python-version }}-${{
@@ -31,14 +33,14 @@ runs:
 
     - name: Cache conda
       id: cache-conda
-      uses: actions/cache/restore@v4
+      uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
       with:
         path: ~/conda_pkgs_dir
         key: ${{ runner.os }}-conda-${{ inputs.python-version }}-${{
           hashFiles('conda/environment.yml','requirements/conda.txt','pyproject.toml') }}
 
     - name: Install Environment
-      uses: conda-incubator/setup-miniconda@v3
+      uses: conda-incubator/setup-miniconda@fc2d68f6413eb2d87b895e92f8584b5b94a10167 # v3
       with:
         activate-environment: bluemira
         environment-file: conda/environment.yml
@@ -50,10 +52,10 @@ runs:
     - name: Install bluemira
       shell: bash -l {0}
       run: |
-        if [[ "${{ inputs.python-version }}" == "3.10" ]]; then
-          pip install -U -e .
+        if [[ "${{ inputs.clone-bluemira }}" == "true" ]]; then
+          pip install -U -e './bluemira[dagmc]' 
         else
-          pip install -U -e '.[dagmc]'
+          pip install -U -e '.[dagmc]' 
         fi
 
     - name: Freeze conda env
@@ -63,7 +65,7 @@ runs:
         conda env export -n bluemira > bluemira_${{ inputs.python-version }}_${{ runner.os }}.yml
 
     - name: Upload environment artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
       if: inputs.with-artifact == 'true'
       with:
         name: bluemira_${{ inputs.python-version }}_${{ runner.os }}.yml
@@ -71,14 +73,14 @@ runs:
         overwrite: true
 
     - name: Save pip build cache
-      uses: actions/cache/save@v4
+      uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
       if: always() && steps.cache-pip.outputs.cache-hit != 'true' && inputs.with-artifact == 'true'
       with:
         path: ~/.cache/pip
         key: ${{ steps.cache-pip.outputs.cache-primary-key }}
 
     - name: Save conda build cache
-      uses: actions/cache/save@v4
+      uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
       if: always() && steps.cache-conda.outputs.cache-hit != 'true' && inputs.with-artifact == 'true'
       with:
         path: ~/conda_pkgs_dir
