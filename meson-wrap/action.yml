@@ -1,0 +1,193 @@
+name: Update Meson WrapDB dependencies
+description: Create one PR per outdated Meson WrapDB dependency
+
+inputs:
+  github-token:
+    description: GitHub token used by gh CLI
+    required: true
+
+  python-version:
+    description: Python version to use
+    required: false
+    default: "3.12"
+
+  subprojects-dir:
+    description: Directory containing Meson wrap files
+    required: false
+    default: "subprojects"
+
+  branch-prefix:
+    description: Prefix for update branches
+    required: false
+    default: "ci/update-meson-wrapdb"
+
+  pr-labels:
+    description: Comma-separated PR labels
+    required: false
+    default: "dependencies,meson"
+
+  validate:
+    description: Run meson setup after each update
+    required: false
+    default: "false"
+
+runs:
+  using: composite
+
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install Meson
+      shell: bash
+      run: |
+        set -euo pipefail
+        python -m pip install --upgrade pip
+        python -m pip install meson ninja
+
+    - name: Update WrapDB index
+      shell: bash
+      run: |
+        set -euo pipefail
+        meson wrap update-db
+
+    - name: Find outdated WrapDB dependencies
+      id: outdated
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        subprojects_dir="${{ inputs.subprojects-dir }}"
+
+        if [ ! -d "$subprojects_dir" ]; then
+          echo "No $subprojects_dir directory found"
+          echo "has_updates=false" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        available_wraps="$(mktemp)"
+        meson wrap list > "$available_wraps"
+
+        : > outdated-wraps.txt
+
+        for wrap in "$subprojects_dir"/*.wrap; do
+          [ -f "$wrap" ] || continue
+
+          dep="$(basename "$wrap" .wrap)"
+
+          if ! grep -q '^wrapdb_version[[:space:]]*=' "$wrap"; then
+            echo "Skipping $dep: not a WrapDB wrap"
+            continue
+          fi
+
+          if ! grep -Fxq "$dep" "$available_wraps"; then
+            echo "Skipping $dep: not found in meson wrap list"
+            continue
+          fi
+
+          current="$(
+            sed -n 's/^wrapdb_version[[:space:]]*=[[:space:]]*//p' "$wrap" \
+              | head -n1 \
+              | tr -d '[:space:]'
+          )"
+
+          latest="$(
+            meson wrap info "$dep" \
+              | awk '/^[[:space:]]*[A-Za-z0-9._+~-]+[[:space:]]+[0-9]+[[:space:]]*$/ { print $1 "-" $2 }' \
+              | sort -V \
+              | tail -n1
+          )"
+
+          if [ -z "$latest" ]; then
+            echo "Skipping $dep: could not determine latest version"
+            continue
+          fi
+
+          if [ "$current" != "$latest" ]; then
+            echo "$dep $current $latest" | tee -a outdated-wraps.txt
+          else
+            echo "$dep is up to date: $current"
+          fi
+        done
+
+        if [ -s outdated-wraps.txt ]; then
+          echo "has_updates=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "has_updates=false" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Create one PR per WrapDB update
+      if: steps.outdated.outputs.has_updates == 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: |
+        set -euo pipefail
+
+        subprojects_dir="${{ inputs.subprojects-dir }}"
+        branch_prefix="${{ inputs.branch-prefix }}"
+        pr_labels="${{ inputs.pr-labels }}"
+
+        default_branch="${GITHUB_BASE_REF:-${GITHUB_REF_NAME}}"
+
+        if [ -n "${GITHUB_REPOSITORY:-}" ]; then
+          default_branch="$(gh repo view "$GITHUB_REPOSITORY" --json defaultBranchRef --jq '.defaultBranchRef.name')"
+        fi
+
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+        while read -r dep current latest; do
+          echo "Updating $dep from $current to $latest"
+
+          safe_latest="$(echo "$latest" | tr '/:@ ' '----')"
+          branch="${branch_prefix}-${dep}-${safe_latest}"
+
+          git fetch origin "$default_branch"
+          git checkout -B "$branch" "origin/$default_branch"
+
+          meson wrap update "$dep"
+
+          if git diff --quiet -- "$subprojects_dir/${dep}.wrap"; then
+            echo "No diff for $dep after meson wrap update; skipping"
+            continue
+          fi
+
+          git add "$subprojects_dir/${dep}.wrap"
+          git commit -m "Update ${dep} WrapDB dependency to ${latest}"
+
+          git push --force-with-lease origin "$branch"
+
+          if gh pr view "$branch" --json number >/dev/null 2>&1; then
+            echo "PR already exists for $branch"
+          else
+            gh pr create \
+              --base "$default_branch" \
+              --head "$branch" \
+              --title "Update ${dep} WrapDB dependency to ${latest}" \
+              --label "$pr_labels" \
+              --body "Updates Meson WrapDB dependency \`${dep}\`.
+
+Current:
+
+\`\`\`
+${current}
+\`\`\`
+
+Latest:
+
+\`\`\`
+${latest}
+\`\`\`
+
+Generated by:
+
+\`\`\`sh
+meson wrap update-db
+meson wrap info ${dep}
+meson wrap update ${dep}
+\`\`\`"
+          fi
+        done < outdated-wraps.txt
