@@ -3,7 +3,7 @@ updates:
  
   - package-ecosystem: "github-actions"
     target-branch: "main"
-    directory: "/"
+    directories: "*/*"
     schedule:
       interval: "weekly"
       day: "monday"
