@@ -63,4 +63,3 @@ runs:
           } catch (error) {
             core.setFailed(`Script failed: ${error.message}`);
           }
-          
