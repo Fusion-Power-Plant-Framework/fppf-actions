@@ -59,6 +59,16 @@ runs:
         conda-remove-defaults: true
         python-version: ${{ inputs.python-version }}
 
+    - name: Install DOLFINx from TestPyPI
+      shell: bash -l {0}
+      run: |
+        pip install \
+          --index-url https://test.pypi.org/simple/
+          --extra-index-url https://pypi.org/simple/
+          "fenics-dolfinx>=0.12.0.dev0" openmpi
+        pip install mpi4py
+
+
     - name: Install bluemira
       shell: bash -l {0}
       run: |
